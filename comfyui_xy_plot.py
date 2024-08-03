@@ -40,6 +40,7 @@ class ComfyUIXYPlot:
         self.default_font_size = 16
         self.default_show_image_labels = True
         self.default_show_axis_labels = True
+        self.default_swap_xy_axis = True
 
         self.load_workflow_defaults()
         self.create_interface()
@@ -82,6 +83,7 @@ class ComfyUIXYPlot:
             with gr.Row():
                 show_image_labels = gr.Checkbox(label="Show Image Labels", value=self.default_show_image_labels)
                 show_axis_labels = gr.Checkbox(label="Show Axis Labels", value=self.default_show_axis_labels)
+                swap_xy_axis = gr.Checkbox(label="Swap X/Y Axis", value=self.default_swap_xy_axis)
 
             generate_button = gr.Button("Generate XY Plot")
             cancel_button = gr.Button("Cancel")
@@ -91,12 +93,15 @@ class ComfyUIXYPlot:
             generate_button.click(
                 self.generate_xy_plot,
                 inputs=[prompt, seed, width, height, steps, samplers, schedulers, 
-                        cell_size, font_size, margin_size, show_image_labels, show_axis_labels],
+                        cell_size, font_size, margin_size, show_image_labels, show_axis_labels, swap_xy_axis],
                 outputs=[status]
             )
             cancel_button.click(self.cancel_generation, outputs=[status])
 
-    def create_xy_plot(self, images, samplers, schedulers, cell_size, font_size, margin_size, show_image_labels, show_axis_labels):
+    def create_xy_plot(self, images, samplers, schedulers, cell_size, font_size, margin_size, show_image_labels, show_axis_labels, swap_xy_axis):
+        if swap_xy_axis:
+            samplers, schedulers = schedulers, samplers
+        
         rows = len(samplers)
         cols = len(schedulers)
         
@@ -121,10 +126,11 @@ class ComfyUIXYPlot:
         except IOError:
             font = ImageFont.load_default()
 
-        for i, sampler in enumerate(samplers):
-            for j, scheduler in enumerate(schedulers):
+        for i, row_label in enumerate(samplers):
+            for j, col_label in enumerate(schedulers):
                 for img, label in images:
-                    if label == f"{sampler}-{scheduler}":
+                    img_label = f"{row_label}-{col_label}" if not swap_xy_axis else f"{col_label}-{row_label}"
+                    if label == img_label:
                         img_resized = img.resize((cell_size, cell_height), Image.LANCZOS)
                         paste_x = j * cell_size + left_margin
                         paste_y = i * cell_height + top_margin
@@ -132,22 +138,24 @@ class ComfyUIXYPlot:
                 
                 # Draw image labels if enabled
                 if show_image_labels:
-                    # Draw scheduler labels (top)
+                    # Draw column labels (top)
                     if i == 0:
                         label_x = j * cell_size + left_margin + cell_size // 2
                         label_y = top_margin // 2
-                        draw.text((label_x, label_y), scheduler, fill="black", font=font, anchor="mm")
+                        draw.text((label_x, label_y), col_label, fill="black", font=font, anchor="mm")
                     
-                    # Draw sampler labels (left)
+                    # Draw row labels (left)
                     if j == 0:
                         label_x = left_margin // 2
                         label_y = i * cell_height + top_margin + cell_height // 2
-                        draw.text((label_x, label_y), sampler, fill="black", font=font, anchor="mm", rotation=90)
+                        draw.text((label_x, label_y), row_label, fill="black", font=font, anchor="mm", rotation=90)
 
         # Draw axis labels if enabled
         if show_axis_labels:
-            draw.text((total_width // 2, top_margin // 4), "Schedulers", fill="black", font=font, anchor="mm")
-            draw.text((left_margin // 4, total_height // 2), "Samplers", fill="black", font=font, anchor="mm", rotation=90)
+            x_axis_label = "Schedulers" if not swap_xy_axis else "Samplers"
+            y_axis_label = "Samplers" if not swap_xy_axis else "Schedulers"
+            draw.text((total_width // 2, top_margin // 4), x_axis_label, fill="black", font=font, anchor="mm")
+            draw.text((left_margin // 4, total_height // 2), y_axis_label, fill="black", font=font, anchor="mm", rotation=90)
 
         return grid_image, self.save_xy_plot(grid_image)
 
@@ -159,7 +167,7 @@ class ComfyUIXYPlot:
         return filepath
 
     def generate_xy_plot(self, prompt, seed, width, height, steps, samplers, schedulers, 
-                         cell_size, font_size, margin_size, show_image_labels, show_axis_labels):
+                         cell_size, font_size, margin_size, show_image_labels, show_axis_labels, swap_xy_axis):
         self.cancel_flag = False
         
         if not all([prompt, seed, width, height, steps, samplers, schedulers]):
@@ -192,7 +200,7 @@ class ComfyUIXYPlot:
 
         if images and not self.cancel_flag:
             _, filepath = self.create_xy_plot(images, samplers, schedulers, cell_size, font_size, 
-                                              margin_size, show_image_labels, show_axis_labels)
+                                              margin_size, show_image_labels, show_axis_labels, swap_xy_axis)
             return None, f"XY Plot generated successfully and saved to {filepath}"
         elif not images:
             return None, "Failed to generate any images."
