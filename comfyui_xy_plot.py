@@ -36,8 +36,8 @@ class ComfyUIXYPlot:
 
         # Default values for new parameters
         self.default_cell_size = 512
-        self.default_margin_size = 100
-        self.default_font_size = 16
+        self.default_margin_size = 200
+        self.default_font_size = 24
         self.default_show_image_labels = True
         self.default_show_axis_labels = True
         self.default_swap_xy_axis = True
