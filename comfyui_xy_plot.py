@@ -110,13 +110,13 @@ class ComfyUIXYPlot:
         
         cell_height = int(cell_size / aspect_ratio)
         
-        # Calculate total dimensions based on show_outer_margin
-        if show_outer_margin:
-            total_width = cols * cell_size + 2 * left_padding
-            total_height = rows * cell_height + 2 * bottom_padding
-        else:
-            total_width = cols * cell_size
-            total_height = rows * cell_height
+        # Calculate margins and total dimensions
+        inner_margin = label_padding * 2
+        outer_margin_left = left_padding if show_outer_margin else inner_margin
+        outer_margin_bottom = bottom_padding if show_outer_margin else inner_margin
+        
+        total_width = cols * cell_size + outer_margin_left + inner_margin
+        total_height = rows * cell_height + outer_margin_bottom + inner_margin
         
         grid_image = Image.new('RGB', (total_width, total_height), color='white')
         draw = ImageDraw.Draw(grid_image)
@@ -131,27 +131,26 @@ class ComfyUIXYPlot:
                 for img, label in images:
                     if label == f"{sampler}-{scheduler}":
                         img_resized = img.resize((cell_size, cell_height), Image.LANCZOS)
-                        paste_x = j * cell_size + (left_padding if show_outer_margin else 0)
-                        paste_y = i * cell_height + (bottom_padding if show_outer_margin else 0)
+                        paste_x = j * cell_size + outer_margin_left
+                        paste_y = i * cell_height + inner_margin
                         grid_image.paste(img_resized, (paste_x, paste_y))
                 
-                # Draw inner labels
                 # Draw scheduler labels (x-axis)
                 if i == rows - 1:
-                    label_x = j * cell_size + (left_padding if show_outer_margin else 0) + cell_size // 2
-                    label_y = total_height - (bottom_padding // 2 if show_outer_margin else label_padding)
+                    label_x = j * cell_size + outer_margin_left + cell_size // 2
+                    label_y = total_height - (outer_margin_bottom // 2 if show_outer_margin else inner_margin // 2)
                     draw.text((label_x, label_y), scheduler, fill="black", font=font, anchor="mm")
                 
                 # Draw sampler labels (y-axis)
                 if j == 0:
-                    label_x = (left_padding - label_padding if show_outer_margin else label_padding)
-                    label_y = i * cell_height + (bottom_padding if show_outer_margin else 0) + cell_height // 2
-                    draw.text((label_x, label_y), sampler, fill="black", font=font, anchor="rm" if show_outer_margin else "lm")
+                    label_x = outer_margin_left - label_padding
+                    label_y = i * cell_height + inner_margin + cell_height // 2
+                    draw.text((label_x, label_y), sampler, fill="black", font=font, anchor="rm")
 
-            # Draw outer axis titles only if show_outer_margin is True
-            if show_outer_margin:
-                draw.text((total_width // 2, total_height - bottom_padding // 4), "Schedulers", fill="black", font=font, anchor="mm")
-                draw.text((left_padding // 2, total_height // 2), "Samplers", fill="black", font=font, anchor="mm", rotation=90)
+        # Draw outer axis titles only if show_outer_margin is True
+        if show_outer_margin:
+            draw.text((total_width // 2, total_height - bottom_padding // 4), "Schedulers", fill="black", font=font, anchor="mm")
+            draw.text((left_padding // 2, total_height // 2), "Samplers", fill="black", font=font, anchor="mm", rotation=90)
 
         return grid_image, self.save_xy_plot(grid_image)
 
