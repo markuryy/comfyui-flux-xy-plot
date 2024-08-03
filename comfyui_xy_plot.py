@@ -223,7 +223,7 @@ class ComfyUIXYPlot:
         workflow['17']['inputs']['steps'] = steps
         workflow['16']['inputs']['sampler_name'] = sampler
         workflow['17']['inputs']['scheduler'] = scheduler
-        workflow['60']['inputs']['guidance_scale'] = guidance_scale
+        workflow['60']['inputs']['guidance'] = guidance_scale
         return workflow
 
     def generate_image(self, workflow):
