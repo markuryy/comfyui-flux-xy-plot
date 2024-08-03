@@ -90,21 +90,16 @@ class ComfyUIXYPlot:
             generate_button = gr.Button("Generate XY Plot")
             cancel_button = gr.Button("Cancel")
 
-            preview_image = gr.Image(label="Preview", interactive=False, height=300)
             output_image = gr.Image(label="XY Plot", interactive=False)
-            download_button = gr.File(label="Download XY Plot")
             status = gr.Textbox(label="Status")
 
             generate_button.click(
                 self.generate_xy_plot,
                 inputs=[prompt, seed, width, height, steps, samplers, schedulers, 
                         cell_size, font_size, left_padding, bottom_padding, label_padding, show_outer_margin],
-                outputs=[preview_image, output_image, download_button, status]
+                outputs=[output_image, status]
             )
             cancel_button.click(self.cancel_generation, outputs=[status])
-
-            # Add this line to update the output image when the download button is clicked
-            download_button.change(lambda x: x, inputs=[download_button], outputs=[output_image])
 
     def create_xy_plot(self, images, samplers, schedulers, cell_size, font_size, left_padding, bottom_padding, label_padding, show_outer_margin):
         rows = len(samplers)
@@ -174,7 +169,7 @@ class ComfyUIXYPlot:
         self.cancel_flag = False
         
         if not all([prompt, seed, width, height, steps, samplers, schedulers]):
-            return None, None, None, "Please fill all fields and select at least one sampler and scheduler."
+            return None, "Please fill all fields and select at least one sampler and scheduler."
 
         try:
             seed = int(seed)
@@ -182,7 +177,7 @@ class ComfyUIXYPlot:
             height = int(height)
             steps = int(steps)
         except ValueError:
-            return None, None, None, "Seed, width, height, and steps must be integers."
+            return None, "Seed, width, height, and steps must be integers."
 
         with open("flux_workflow_api.json", "r") as file:
             workflow = json.load(file)
@@ -193,22 +188,20 @@ class ComfyUIXYPlot:
         for i, sampler in enumerate(samplers):
             for j, scheduler in enumerate(schedulers):
                 if self.cancel_flag:
-                    return None, None, None, "Generation cancelled."
+                    return None, "Generation cancelled."
                 modified_workflow = self.modify_workflow(workflow, prompt, seed, width, height, steps, sampler, scheduler)
                 image_data = self.generate_image(modified_workflow)
                 if image_data:
                     image = Image.open(io.BytesIO(image_data))
                     images.append((image, f"{sampler}-{scheduler}"))
-                    preview_image = image.copy()
-                    preview_image.thumbnail((300, 300), Image.LANCZOS)
-                    yield preview_image, None, None, f"Generated {len(images)}/{total_images} images"
+                    yield None, f"Generated {len(images)}/{total_images} images"
 
         if images and not self.cancel_flag:
             xy_plot, filepath = self.create_xy_plot(images, samplers, schedulers, cell_size, font_size, 
                                                     left_padding, bottom_padding, label_padding, show_outer_margin)
-            return None, xy_plot, filepath, "XY Plot generated successfully and saved to file"
+            return xy_plot, f"XY Plot generated successfully and saved to {filepath}"
         elif not images:
-            return None, None, None, "Failed to generate any images."
+            return None, "Failed to generate any images."
 
     def cancel_generation(self):
         self.cancel_flag = True
