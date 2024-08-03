@@ -26,9 +26,6 @@ class ComfyUIXYPlot:
             "ddim_uniform", "beta"
         ]
 
-        self.load_workflow_defaults()
-        self.create_interface()
-
         # Default values for new parameters
         self.default_cell_size = 512
         self.default_left_padding = 200
@@ -36,6 +33,9 @@ class ComfyUIXYPlot:
         self.default_font_size = 16
         self.default_label_padding = 10
         self.default_show_outer_margin = True
+
+        self.load_workflow_defaults()
+        self.create_interface()
 
     def load_workflow_defaults(self):
         with open("flux_workflow_api.json", "r") as file:
