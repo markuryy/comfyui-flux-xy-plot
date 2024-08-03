@@ -135,19 +135,18 @@ class ComfyUIXYPlot:
                         paste_y = i * cell_height + (bottom_padding if show_outer_margin else 0)
                         grid_image.paste(img_resized, (paste_x, paste_y))
                 
-                # Draw labels only if show_outer_margin is True
-                if show_outer_margin:
-                    # Draw scheduler labels (x-axis)
-                    if i == rows - 1:
-                        label_x = j * cell_size + left_padding + cell_size // 2
-                        label_y = total_height - bottom_padding // 2
-                        draw.text((label_x, label_y), scheduler, fill="black", font=font, anchor="mm")
-                    
-                    # Draw sampler labels (y-axis)
-                    if j == 0:
-                        label_x = left_padding - label_padding
-                        label_y = i * cell_height + bottom_padding + cell_height // 2
-                        draw.text((label_x, label_y), sampler, fill="black", font=font, anchor="rm")
+                # Draw inner labels
+                # Draw scheduler labels (x-axis)
+                if i == rows - 1:
+                    label_x = j * cell_size + (left_padding if show_outer_margin else 0) + cell_size // 2
+                    label_y = total_height - (bottom_padding // 2 if show_outer_margin else label_padding)
+                    draw.text((label_x, label_y), scheduler, fill="black", font=font, anchor="mm")
+                
+                # Draw sampler labels (y-axis)
+                if j == 0:
+                    label_x = (left_padding - label_padding if show_outer_margin else label_padding)
+                    label_y = i * cell_height + (bottom_padding if show_outer_margin else 0) + cell_height // 2
+                    draw.text((label_x, label_y), sampler, fill="black", font=font, anchor="rm" if show_outer_margin else "lm")
 
             # Draw outer axis titles only if show_outer_margin is True
             if show_outer_margin:
