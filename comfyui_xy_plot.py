@@ -41,6 +41,7 @@ class ComfyUIXYPlot:
         self.default_show_image_labels = True
         self.default_show_axis_labels = True
         self.default_swap_xy_axis = True
+        self.default_guidance_scale = 3.5
 
         self.load_workflow_defaults()
         self.create_interface()
@@ -85,6 +86,9 @@ class ComfyUIXYPlot:
                 show_axis_labels = gr.Checkbox(label="Show Axis Labels", value=self.default_show_axis_labels)
                 swap_xy_axis = gr.Checkbox(label="Swap X/Y Axis", value=self.default_swap_xy_axis)
 
+            with gr.Row():
+                guidance_scale = gr.Slider(minimum=1.0, maximum=20.0, step=0.1, label="Guidance Scale", value=self.default_guidance_scale)
+
             generate_button = gr.Button("Generate XY Plot")
             cancel_button = gr.Button("Cancel")
 
@@ -93,7 +97,8 @@ class ComfyUIXYPlot:
             generate_button.click(
                 self.generate_xy_plot,
                 inputs=[prompt, seed, width, height, steps, samplers, schedulers, 
-                        cell_size, font_size, margin_size, show_image_labels, show_axis_labels, swap_xy_axis],
+                        cell_size, font_size, margin_size, show_image_labels, show_axis_labels, swap_xy_axis,
+                        guidance_scale],
                 outputs=[status]
             )
             cancel_button.click(self.cancel_generation, outputs=[status])
@@ -167,7 +172,8 @@ class ComfyUIXYPlot:
         return filepath
 
     def generate_xy_plot(self, prompt, seed, width, height, steps, samplers, schedulers, 
-                         cell_size, font_size, margin_size, show_image_labels, show_axis_labels, swap_xy_axis):
+                         cell_size, font_size, margin_size, show_image_labels, show_axis_labels, swap_xy_axis,
+                         guidance_scale):
         self.cancel_flag = False
         
         if not all([prompt, seed, width, height, steps, samplers, schedulers]):
@@ -191,7 +197,7 @@ class ComfyUIXYPlot:
             for j, scheduler in enumerate(schedulers):
                 if self.cancel_flag:
                     return None, "Generation cancelled."
-                modified_workflow = self.modify_workflow(workflow, prompt, seed, width, height, steps, sampler, scheduler)
+                modified_workflow = self.modify_workflow(workflow, prompt, seed, width, height, steps, sampler, scheduler, guidance_scale)
                 image_data = self.generate_image(modified_workflow)
                 if image_data:
                     image = Image.open(io.BytesIO(image_data))
@@ -209,7 +215,7 @@ class ComfyUIXYPlot:
         self.cancel_flag = True
         return "Cancelling..."
 
-    def modify_workflow(self, workflow, prompt, seed, width, height, steps, sampler, scheduler):
+    def modify_workflow(self, workflow, prompt, seed, width, height, steps, sampler, scheduler, guidance_scale):
         workflow['28']['inputs']['string'] = prompt
         workflow['25']['inputs']['noise_seed'] = seed
         workflow['5']['inputs']['width'] = width
@@ -217,6 +223,7 @@ class ComfyUIXYPlot:
         workflow['17']['inputs']['steps'] = steps
         workflow['16']['inputs']['sampler_name'] = sampler
         workflow['17']['inputs']['scheduler'] = scheduler
+        workflow['60']['inputs']['guidance_scale'] = guidance_scale
         return workflow
 
     def generate_image(self, workflow):
