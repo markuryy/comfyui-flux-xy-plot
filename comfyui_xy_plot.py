@@ -36,11 +36,10 @@ class ComfyUIXYPlot:
 
         # Default values for new parameters
         self.default_cell_size = 512
-        self.default_left_padding = 200
-        self.default_bottom_padding = 100
+        self.default_margin_size = 100
         self.default_font_size = 16
-        self.default_label_padding = 10
-        self.default_show_outer_margin = True
+        self.default_show_image_labels = True
+        self.default_show_axis_labels = True
 
         self.load_workflow_defaults()
         self.create_interface()
@@ -73,19 +72,16 @@ class ComfyUIXYPlot:
                 schedulers = gr.CheckboxGroup(choices=self.schedulers, label="Schedulers", value=[self.default_scheduler])
 
             with gr.Row():
-                gr.Markdown("### Label Settings")
+                gr.Markdown("### Label and Margin Settings")
             
             with gr.Row():
                 cell_size = gr.Slider(minimum=128, maximum=1024, step=32, label="Cell Size", value=self.default_cell_size)
                 font_size = gr.Slider(minimum=8, maximum=32, step=1, label="Font Size", value=self.default_font_size)
+                margin_size = gr.Slider(minimum=50, maximum=400, step=10, label="Margin Size", value=self.default_margin_size)
 
             with gr.Row():
-                left_padding = gr.Slider(minimum=50, maximum=400, step=10, label="Left Padding", value=self.default_left_padding)
-                bottom_padding = gr.Slider(minimum=50, maximum=400, step=10, label="Bottom Padding", value=self.default_bottom_padding)
-                label_padding = gr.Slider(minimum=5, maximum=50, step=1, label="Label Padding", value=self.default_label_padding)
-
-            with gr.Row():
-                show_outer_margin = gr.Checkbox(label="Show Outer Margin", value=self.default_show_outer_margin)
+                show_image_labels = gr.Checkbox(label="Show Image Labels", value=self.default_show_image_labels)
+                show_axis_labels = gr.Checkbox(label="Show Axis Labels", value=self.default_show_axis_labels)
 
             generate_button = gr.Button("Generate XY Plot")
             cancel_button = gr.Button("Cancel")
@@ -95,12 +91,12 @@ class ComfyUIXYPlot:
             generate_button.click(
                 self.generate_xy_plot,
                 inputs=[prompt, seed, width, height, steps, samplers, schedulers, 
-                        cell_size, font_size, left_padding, bottom_padding, label_padding, show_outer_margin],
+                        cell_size, font_size, margin_size, show_image_labels, show_axis_labels],
                 outputs=[status]
             )
             cancel_button.click(self.cancel_generation, outputs=[status])
 
-    def create_xy_plot(self, images, samplers, schedulers, cell_size, font_size, left_padding, bottom_padding, label_padding, show_outer_margin):
+    def create_xy_plot(self, images, samplers, schedulers, cell_size, font_size, margin_size, show_image_labels, show_axis_labels):
         rows = len(samplers)
         cols = len(schedulers)
         
@@ -111,12 +107,11 @@ class ComfyUIXYPlot:
         cell_height = int(cell_size / aspect_ratio)
         
         # Calculate margins and total dimensions
-        inner_margin = label_padding * 2
-        outer_margin_left = left_padding if show_outer_margin else inner_margin
-        outer_margin_bottom = bottom_padding if show_outer_margin else inner_margin
+        left_margin = margin_size if show_image_labels or show_axis_labels else 0
+        top_margin = margin_size if show_image_labels or show_axis_labels else 0
         
-        total_width = cols * cell_size + outer_margin_left + inner_margin
-        total_height = rows * cell_height + outer_margin_bottom + inner_margin
+        total_width = cols * cell_size + left_margin
+        total_height = rows * cell_height + top_margin
         
         grid_image = Image.new('RGB', (total_width, total_height), color='white')
         draw = ImageDraw.Draw(grid_image)
@@ -131,26 +126,28 @@ class ComfyUIXYPlot:
                 for img, label in images:
                     if label == f"{sampler}-{scheduler}":
                         img_resized = img.resize((cell_size, cell_height), Image.LANCZOS)
-                        paste_x = j * cell_size + outer_margin_left
-                        paste_y = i * cell_height + inner_margin
+                        paste_x = j * cell_size + left_margin
+                        paste_y = i * cell_height + top_margin
                         grid_image.paste(img_resized, (paste_x, paste_y))
                 
-                # Draw scheduler labels (x-axis)
-                if i == rows - 1:
-                    label_x = j * cell_size + outer_margin_left + cell_size // 2
-                    label_y = total_height - (outer_margin_bottom // 2 if show_outer_margin else inner_margin // 2)
-                    draw.text((label_x, label_y), scheduler, fill="black", font=font, anchor="mm")
-                
-                # Draw sampler labels (y-axis)
-                if j == 0:
-                    label_x = outer_margin_left - label_padding
-                    label_y = i * cell_height + inner_margin + cell_height // 2
-                    draw.text((label_x, label_y), sampler, fill="black", font=font, anchor="rm")
+                # Draw image labels if enabled
+                if show_image_labels:
+                    # Draw scheduler labels (top)
+                    if i == 0:
+                        label_x = j * cell_size + left_margin + cell_size // 2
+                        label_y = top_margin // 2
+                        draw.text((label_x, label_y), scheduler, fill="black", font=font, anchor="mm")
+                    
+                    # Draw sampler labels (left)
+                    if j == 0:
+                        label_x = left_margin // 2
+                        label_y = i * cell_height + top_margin + cell_height // 2
+                        draw.text((label_x, label_y), sampler, fill="black", font=font, anchor="mm", rotation=90)
 
-        # Draw outer axis titles only if show_outer_margin is True
-        if show_outer_margin:
-            draw.text((total_width // 2, total_height - bottom_padding // 4), "Schedulers", fill="black", font=font, anchor="mm")
-            draw.text((left_padding // 2, total_height // 2), "Samplers", fill="black", font=font, anchor="mm", rotation=90)
+        # Draw axis labels if enabled
+        if show_axis_labels:
+            draw.text((total_width // 2, top_margin // 4), "Schedulers", fill="black", font=font, anchor="mm")
+            draw.text((left_margin // 4, total_height // 2), "Samplers", fill="black", font=font, anchor="mm", rotation=90)
 
         return grid_image, self.save_xy_plot(grid_image)
 
@@ -162,7 +159,7 @@ class ComfyUIXYPlot:
         return filepath
 
     def generate_xy_plot(self, prompt, seed, width, height, steps, samplers, schedulers, 
-                         cell_size, font_size, left_padding, bottom_padding, label_padding, show_outer_margin):
+                         cell_size, font_size, margin_size, show_image_labels, show_axis_labels):
         self.cancel_flag = False
         
         if not all([prompt, seed, width, height, steps, samplers, schedulers]):
@@ -195,7 +192,7 @@ class ComfyUIXYPlot:
 
         if images and not self.cancel_flag:
             _, filepath = self.create_xy_plot(images, samplers, schedulers, cell_size, font_size, 
-                                              left_padding, bottom_padding, label_padding, show_outer_margin)
+                                              margin_size, show_image_labels, show_axis_labels)
             return None, f"XY Plot generated successfully and saved to {filepath}"
         elif not images:
             return None, "Failed to generate any images."
