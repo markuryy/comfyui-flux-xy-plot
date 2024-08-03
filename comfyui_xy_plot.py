@@ -42,6 +42,10 @@ class ComfyUIXYPlot:
         self.default_show_axis_labels = True
         self.default_swap_xy_axis = True
         self.default_guidance_scale = 3.5
+        self.default_guidance_scale_values = [1.0, 3.5, 7.0, 10.0]
+        self.axis_options = ["Samplers", "Schedulers", "Guidance Scale"]
+        self.default_x_axis = "Samplers"
+        self.default_y_axis = "Schedulers"
 
         self.load_workflow_defaults()
         self.create_interface()
@@ -70,8 +74,15 @@ class ComfyUIXYPlot:
                 steps = gr.Slider(minimum=1, maximum=150, step=1, label="Steps", value=self.default_steps)
 
             with gr.Row():
-                samplers = gr.CheckboxGroup(choices=self.samplers, label="Samplers", value=[self.default_sampler])
-                schedulers = gr.CheckboxGroup(choices=self.schedulers, label="Schedulers", value=[self.default_scheduler])
+                x_axis = gr.Dropdown(choices=self.axis_options, label="X Axis", value=self.default_x_axis)
+                y_axis = gr.Dropdown(choices=self.axis_options, label="Y Axis", value=self.default_y_axis)
+
+            with gr.Row():
+                samplers = gr.Dropdown(choices=self.samplers, label="Samplers", multiselect=True, value=[self.default_sampler])
+                schedulers = gr.Dropdown(choices=self.schedulers, label="Schedulers", multiselect=True, value=[self.default_scheduler])
+
+            with gr.Row():
+                guidance_scale_values = gr.TextArea(label="Guidance Scale Values", value=", ".join(map(str, self.default_guidance_scale_values)))
 
             with gr.Row():
                 gr.Markdown("### Label and Margin Settings")
@@ -84,10 +95,6 @@ class ComfyUIXYPlot:
             with gr.Row():
                 show_image_labels = gr.Checkbox(label="Show Image Labels", value=self.default_show_image_labels)
                 show_axis_labels = gr.Checkbox(label="Show Axis Labels", value=self.default_show_axis_labels)
-                swap_xy_axis = gr.Checkbox(label="Swap X/Y Axis", value=self.default_swap_xy_axis)
-
-            with gr.Row():
-                guidance_scale = gr.Slider(minimum=1.0, maximum=20.0, step=0.1, label="Guidance Scale", value=self.default_guidance_scale)
 
             generate_button = gr.Button("Generate XY Plot")
             cancel_button = gr.Button("Cancel")
@@ -97,18 +104,15 @@ class ComfyUIXYPlot:
             generate_button.click(
                 self.generate_xy_plot,
                 inputs=[prompt, seed, width, height, steps, samplers, schedulers, 
-                        cell_size, font_size, margin_size, show_image_labels, show_axis_labels, swap_xy_axis,
-                        guidance_scale],
+                        cell_size, font_size, margin_size, show_image_labels, show_axis_labels,
+                        x_axis, y_axis, guidance_scale_values],
                 outputs=[status]
             )
             cancel_button.click(self.cancel_generation, outputs=[status])
 
-    def create_xy_plot(self, images, samplers, schedulers, cell_size, font_size, margin_size, show_image_labels, show_axis_labels, swap_xy_axis):
-        if swap_xy_axis:
-            samplers, schedulers = schedulers, samplers
-        
-        rows = len(samplers)
-        cols = len(schedulers)
+    def create_xy_plot(self, images, x_values, y_values, x_axis, y_axis, cell_size, font_size, margin_size, show_image_labels, show_axis_labels):
+        rows = len(y_values)
+        cols = len(x_values)
         
         # Calculate the aspect ratio of the first image
         first_image = images[0][0]
@@ -131,10 +135,10 @@ class ComfyUIXYPlot:
         except IOError:
             font = ImageFont.load_default()
 
-        for i, row_label in enumerate(samplers):
-            for j, col_label in enumerate(schedulers):
+        for i, y_value in enumerate(y_values):
+            for j, x_value in enumerate(x_values):
                 for img, label in images:
-                    img_label = f"{row_label}-{col_label}" if not swap_xy_axis else f"{col_label}-{row_label}"
+                    img_label = f"{x_value}-{y_value}"
                     if label == img_label:
                         img_resized = img.resize((cell_size, cell_height), Image.LANCZOS)
                         paste_x = j * cell_size + left_margin
@@ -147,20 +151,18 @@ class ComfyUIXYPlot:
                     if i == 0:
                         label_x = j * cell_size + left_margin + cell_size // 2
                         label_y = top_margin // 2
-                        draw.text((label_x, label_y), col_label, fill="black", font=font, anchor="mm")
+                        draw.text((label_x, label_y), str(x_value), fill="black", font=font, anchor="mm")
                     
                     # Draw row labels (left)
                     if j == 0:
                         label_x = left_margin // 2
                         label_y = i * cell_height + top_margin + cell_height // 2
-                        draw.text((label_x, label_y), row_label, fill="black", font=font, anchor="mm", rotation=90)
+                        draw.text((label_x, label_y), str(y_value), fill="black", font=font, anchor="mm", rotation=90)
 
         # Draw axis labels if enabled
         if show_axis_labels:
-            x_axis_label = "Schedulers" if not swap_xy_axis else "Samplers"
-            y_axis_label = "Samplers" if not swap_xy_axis else "Schedulers"
-            draw.text((total_width // 2, top_margin // 4), x_axis_label, fill="black", font=font, anchor="mm")
-            draw.text((left_margin // 4, total_height // 2), y_axis_label, fill="black", font=font, anchor="mm", rotation=90)
+            draw.text((total_width // 2, top_margin // 4), x_axis, fill="black", font=font, anchor="mm")
+            draw.text((left_margin // 4, total_height // 2), y_axis, fill="black", font=font, anchor="mm", rotation=90)
 
         return grid_image, self.save_xy_plot(grid_image)
 
@@ -172,44 +174,84 @@ class ComfyUIXYPlot:
         return filepath
 
     def generate_xy_plot(self, prompt, seed, width, height, steps, samplers, schedulers, 
-                         cell_size, font_size, margin_size, show_image_labels, show_axis_labels, swap_xy_axis,
-                         guidance_scale):
+                         cell_size, font_size, margin_size, show_image_labels, show_axis_labels,
+                         x_axis, y_axis, guidance_scale_values):
         self.cancel_flag = False
         
-        if not all([prompt, seed, width, height, steps, samplers, schedulers]):
-            return None, "Please fill all fields and select at least one sampler and scheduler."
+        if not all([prompt, seed, width, height, steps, samplers, schedulers, guidance_scale_values]):
+            return None, "Please fill all fields and select at least one option for each parameter."
 
         try:
             seed = int(seed)
             width = int(width)
             height = int(height)
             steps = int(steps)
+            guidance_scale_values = [float(x.strip()) for x in guidance_scale_values.split(',')]
         except ValueError:
-            return None, "Seed, width, height, and steps must be integers."
+            return None, "Invalid input. Please check all numeric values."
 
         with open("flux_workflow_api.json", "r") as file:
             workflow = json.load(file)
 
-        total_images = len(samplers) * len(schedulers)
+        x_values = self.get_axis_values(x_axis, samplers, schedulers, guidance_scale_values)
+        y_values = self.get_axis_values(y_axis, samplers, schedulers, guidance_scale_values)
+
+        total_images = len(x_values) * len(y_values)
         images = []
 
-        for i, sampler in enumerate(samplers):
-            for j, scheduler in enumerate(schedulers):
+        for i, x_value in enumerate(x_values):
+            for j, y_value in enumerate(y_values):
                 if self.cancel_flag:
                     return None, "Generation cancelled."
-                modified_workflow = self.modify_workflow(workflow, prompt, seed, width, height, steps, sampler, scheduler, guidance_scale)
+                
+                params = self.get_params(x_axis, y_axis, x_value, y_value, samplers[0], schedulers[0], guidance_scale_values[0])
+                modified_workflow = self.modify_workflow(workflow, prompt, seed, width, height, steps, **params)
                 image_data = self.generate_image(modified_workflow)
+                
                 if image_data:
                     image = Image.open(io.BytesIO(image_data))
-                    images.append((image, f"{sampler}-{scheduler}"))
+                    images.append((image, f"{x_value}-{y_value}"))
                     yield None, f"Generated {len(images)}/{total_images} images"
 
         if images and not self.cancel_flag:
-            _, filepath = self.create_xy_plot(images, samplers, schedulers, cell_size, font_size, 
-                                              margin_size, show_image_labels, show_axis_labels, swap_xy_axis)
+            _, filepath = self.create_xy_plot(images, x_values, y_values, x_axis, y_axis, cell_size, font_size, 
+                                              margin_size, show_image_labels, show_axis_labels)
             return None, f"XY Plot generated successfully and saved to {filepath}"
         elif not images:
             return None, "Failed to generate any images."
+
+    def get_axis_values(self, axis, samplers, schedulers, guidance_scale_values):
+        if axis == "Samplers":
+            return samplers
+        elif axis == "Schedulers":
+            return schedulers
+        elif axis == "Guidance Scale":
+            return guidance_scale_values
+        else:
+            raise ValueError(f"Invalid axis: {axis}")
+
+    def get_params(self, x_axis, y_axis, x_value, y_value, default_sampler, default_scheduler, default_guidance):
+        params = {
+            "sampler": default_sampler,
+            "scheduler": default_scheduler,
+            "guidance_scale": default_guidance
+        }
+        
+        if x_axis == "Samplers":
+            params["sampler"] = x_value
+        elif x_axis == "Schedulers":
+            params["scheduler"] = x_value
+        elif x_axis == "Guidance Scale":
+            params["guidance_scale"] = x_value
+
+        if y_axis == "Samplers":
+            params["sampler"] = y_value
+        elif y_axis == "Schedulers":
+            params["scheduler"] = y_value
+        elif y_axis == "Guidance Scale":
+            params["guidance_scale"] = y_value
+
+        return params
 
     def cancel_generation(self):
         self.cancel_flag = True
