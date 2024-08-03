@@ -8,9 +8,13 @@ import os
 from PIL import Image, ImageDraw, ImageFont
 import io
 import threading
+import os
+from datetime import datetime
 
 class ComfyUIXYPlot:
     def __init__(self):
+        self.output_dir = "xy_plot_outputs"
+        os.makedirs(self.output_dir, exist_ok=True)
         self.server_address = '127.0.0.1:8188'
         self.client_id = str(uuid.uuid4())
         self.ws = None
@@ -84,13 +88,14 @@ class ComfyUIXYPlot:
 
             preview_image = gr.Image(label="Preview", interactive=False, height=300)
             output_image = gr.Image(label="XY Plot", interactive=False)
+            download_button = gr.File(label="Download XY Plot")
             status = gr.Textbox(label="Status")
 
             generate_button.click(
                 self.generate_xy_plot,
                 inputs=[prompt, seed, width, height, steps, samplers, schedulers, 
                         cell_size, font_size, left_padding, bottom_padding, label_padding, show_outer_margin],
-                outputs=[preview_image, output_image, status]
+                outputs=[preview_image, output_image, download_button, status]
             )
             cancel_button.click(self.cancel_generation, outputs=[status])
 
@@ -141,14 +146,21 @@ class ComfyUIXYPlot:
             draw.text((total_width // 2, total_height - bottom_padding // 4), "Schedulers", fill="black", font=font, anchor="mm")
             draw.text((left_padding // 2, total_height // 2), "Samplers", fill="black", font=font, anchor="mm", rotation=90)
 
-        return grid_image
+        return grid_image, self.save_xy_plot(grid_image)
+
+    def save_xy_plot(self, grid_image):
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"xy_plot_{timestamp}.png"
+        filepath = os.path.join(self.output_dir, filename)
+        grid_image.save(filepath)
+        return filepath
 
     def generate_xy_plot(self, prompt, seed, width, height, steps, samplers, schedulers, 
                          cell_size, font_size, left_padding, bottom_padding, label_padding, show_outer_margin):
         self.cancel_flag = False
         
         if not all([prompt, seed, width, height, steps, samplers, schedulers]):
-            return None, None, "Please fill all fields and select at least one sampler and scheduler."
+            return None, None, None, "Please fill all fields and select at least one sampler and scheduler."
 
         try:
             seed = int(seed)
@@ -156,7 +168,7 @@ class ComfyUIXYPlot:
             height = int(height)
             steps = int(steps)
         except ValueError:
-            return None, None, "Seed, width, height, and steps must be integers."
+            return None, None, None, "Seed, width, height, and steps must be integers."
 
         with open("flux_workflow_api.json", "r") as file:
             workflow = json.load(file)
@@ -167,7 +179,7 @@ class ComfyUIXYPlot:
         for i, sampler in enumerate(samplers):
             for j, scheduler in enumerate(schedulers):
                 if self.cancel_flag:
-                    return None, None, "Generation cancelled."
+                    return None, None, None, "Generation cancelled."
                 modified_workflow = self.modify_workflow(workflow, prompt, seed, width, height, steps, sampler, scheduler)
                 image_data = self.generate_image(modified_workflow)
                 if image_data:
@@ -175,14 +187,14 @@ class ComfyUIXYPlot:
                     images.append((image, f"{sampler}-{scheduler}"))
                     preview_image = image.copy()
                     preview_image.thumbnail((300, 300), Image.LANCZOS)
-                    yield preview_image, None, f"Generated {len(images)}/{total_images} images"
+                    yield preview_image, None, None, f"Generated {len(images)}/{total_images} images"
 
         if images and not self.cancel_flag:
-            xy_plot = self.create_xy_plot(images, samplers, schedulers, cell_size, font_size, 
-                                          left_padding, bottom_padding, label_padding, show_outer_margin)
-            return None, xy_plot, "XY Plot generated successfully"
+            xy_plot, filepath = self.create_xy_plot(images, samplers, schedulers, cell_size, font_size, 
+                                                    left_padding, bottom_padding, label_padding, show_outer_margin)
+            return None, xy_plot, filepath, "XY Plot generated successfully and saved to file"
         elif not images:
-            return None, None, "Failed to generate any images."
+            return None, None, None, "Failed to generate any images."
 
     def cancel_generation(self):
         self.cancel_flag = True
