@@ -144,7 +144,7 @@
         0
       ],
       "conditioning": [
-        "6",
+        "60",
         0
       ]
     },
@@ -155,7 +155,7 @@
   },
   "25": {
     "inputs": {
-      "noise_seed": 69
+      "noise_seed": 815311868521703
     },
     "class_type": "RandomNoise",
     "_meta": {
@@ -164,11 +164,24 @@
   },
   "28": {
     "inputs": {
-      "string": "promptstring"
+      "string": "this is the prompt"
     },
     "class_type": "String Literal",
     "_meta": {
       "title": "String Literal"
+    }
+  },
+  "60": {
+    "inputs": {
+      "guidance": 3.5,
+      "conditioning": [
+        "6",
+        0
+      ]
+    },
+    "class_type": "FluxGuidance",
+    "_meta": {
+      "title": "FluxGuidance"
     }
   }
 }
