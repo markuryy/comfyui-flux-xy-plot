@@ -20,6 +20,10 @@ class ComfyUIXYPlot:
         self.ws = None
         self.cancel_flag = False
 
+        # Initialize WebSocket connection
+        self.ws = websocket.WebSocket()
+        self.ws.connect(f"ws://{self.server_address}/ws?clientId={self.client_id}")
+
         self.samplers = [
             "euler", "euler_ancestral", "heun", "dpm_2", "dpm_2_ancestral",
             "lms", "dpm_fast", "dpm_adaptive", "dpmpp_2s_ancestral", "dpmpp_sde",
@@ -213,8 +217,6 @@ class ComfyUIXYPlot:
     def generate_image(self, workflow):
         prompt_id = self.queue_prompt(workflow)
         if prompt_id:
-            self.ws = websocket.WebSocket()
-            self.ws.connect(f"ws://{self.server_address}/ws?clientId={self.client_id}")
             return self.track_progress(prompt_id)
         return None
 
